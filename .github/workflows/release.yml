@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package resource
+        run: |
+          mkdir -p fivem-webcam-ik
+          cp -r client.js fxmanifest.lua ui/ fivem-webcam-ik/
+          zip -r fivem-webcam-ik.zip fivem-webcam-ik/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          files: fivem-webcam-ik.zip
+          generate_release_notes: true

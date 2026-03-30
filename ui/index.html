@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam IK</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="webcam-overlay" class="webcam-debug-overlay" style="display: none;">
+        <div class="webcam-debug-panel">
+            <div class="webcam-debug-header">
+                <span class="webcam-debug-title">Webcam + Pose Debug</span>
+                <button class="webcam-debug-close-btn" id="btn-close">&times;</button>
+            </div>
+
+            <div class="webcam-debug-body">
+                <!-- Status -->
+                <div id="status-bar" class="webcam-debug-status status-idle">Idle</div>
+
+                <!-- Video feed with canvas overlay -->
+                <div class="webcam-debug-video-container">
+                    <video id="webcam-video" autoplay playsinline muted class="webcam-debug-video"></video>
+                    <canvas id="overlay-canvas" class="webcam-debug-canvas"></canvas>
+                </div>
+
+                <!-- Pose info -->
+                <div id="pose-info" class="webcam-debug-pose-info" style="display: none;">
+                    <div class="webcam-debug-subtitle">Tracked Landmarks:</div>
+                    <div id="pose-head">Head: ---</div>
+                    <div id="pose-lwrist">L Wrist: ---</div>
+                    <div id="pose-rwrist">R Wrist: ---</div>
+                    <div id="pose-fps">FPS: 0</div>
+                    <div>Sending to IK: <span id="pose-sending" class="status-idle">NO</span></div>
+                </div>
+
+                <!-- Info -->
+                <div class="webcam-debug-info">
+                    <div id="info-device"></div>
+                    <div id="info-resolution"></div>
+                    <div id="info-error" class="webcam-debug-error"></div>
+                </div>
+
+                <!-- Controls -->
+                <div class="webcam-debug-controls">
+                    <button id="btn-start-webcam" class="btn-green">Start Webcam</button>
+                    <button id="btn-start-pose" class="btn-orange" disabled>Start Pose</button>
+                    <button id="btn-toggle-ik" class="btn-purple" disabled>Send to IK</button>
+                    <button id="btn-stop-all" class="btn-red">Stop All</button>
+                </div>
+
+                <!-- API Support -->
+                <div class="webcam-debug-api">
+                    <div class="webcam-debug-subtitle">API Support:</div>
+                    <div id="api-gum">getUserMedia: ---</div>
+                    <div id="api-webgl">WebGL: ---</div>
+                    <div id="api-wasm">WASM: ---</div>
+                    <div id="api-sab">SharedArrayBuffer: ---</div>
+                    <div id="api-protocol">protocol: ---</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
