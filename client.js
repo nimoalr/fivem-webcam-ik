@@ -4,7 +4,7 @@
 // /webcam  — Toggle webcam + pose estimation + IK puppet mode
 //
 // Uses invisible snowball prop entities as IK targets.
-// Player is frozen while active (locomotion overrides IK otherwise).
+// Player can move freely while IK is active.
 // =============================================================================
 
 let ikPuppetTick = null;
@@ -25,9 +25,6 @@ const ikState = {
     smoothRight: { x: 0.3, y: 0.5, z: 0.0 },
     smoothLeft:  { x: -0.3, y: 0.5, z: 0.0 },
     smoothHead:  { x: 0.0, y: 10.0, z: 0.0 },
-    selectedLimb: 'rightArm', // 'rightArm' | 'leftArm' | 'head'
-    poseMode: false,
-    speed: 0.03,
     smoothFactor: 0.25,
 };
 
@@ -55,7 +52,7 @@ function copyDir(d) {
 // --- NUI Callbacks ---
 
 RegisterNuiCallback('uc::ikPuppet::poseLandmarks', (data, cb) => {
-    if (!ikState.active || !ikState.poseMode) { cb('ok'); return; }
+    if (!ikState.active) { cb('ok'); return; }
     ikState.rightArm = data.rightArm;
     ikState.leftArm = data.leftArm;
     ikState.head = data.head;
@@ -106,10 +103,8 @@ function deleteIkProp(prop) {
 function stopIkPuppet() {
     const ped = PlayerPedId();
     ikState.active = false;
-    ikState.poseMode = false;
     ikReceivingData = false;
     ikLogCounter = 0;
-    FreezeEntityPosition(ped, false);
     if (ikPuppetTick !== null) { clearTick(ikPuppetTick); ikPuppetTick = null; }
     ikRightProp = deleteIkProp(ikRightProp);
     ikLeftProp = deleteIkProp(ikLeftProp);
@@ -127,8 +122,7 @@ async function startIkPuppetTick() {
     const ped = PlayerPedId();
     SetPedCanArmIk(ped, true);
     SetPedCanHeadIk(ped, true);
-    FreezeEntityPosition(ped, true);
-    console.log('[IK] Player frozen for IK control');
+    console.log('[IK] IK control started (free movement enabled)');
 
     ikRightProp = await createIkProp(ped);
     ikLeftProp = await createIkProp(ped);
@@ -141,35 +135,11 @@ async function startIkPuppetTick() {
         if (!ikState.active || !DoesEntityExist(ped)) return;
         if (ikRightProp === null || ikLeftProp === null) return;
 
-        // Disable all controls so locomotion doesn't fight IK
-        DisableAllControlActions(0);
-
-        if (!ikState.poseMode) {
-            // --- Keyboard mode ---
-            const speed = ikState.speed;
-            const limb = ikState[ikState.selectedLimb];
-            // Arrow keys
-            if (IsDisabledControlPressed(0, 172) || IsControlPressed(0, 172)) limb.y += speed;
-            if (IsDisabledControlPressed(0, 173) || IsControlPressed(0, 173)) limb.y -= speed;
-            if (IsDisabledControlPressed(0, 174) || IsControlPressed(0, 174)) limb.x -= speed;
-            if (IsDisabledControlPressed(0, 175) || IsControlPressed(0, 175)) limb.x += speed;
-            // Numpad +/-
-            if (IsControlPressed(0, 96)) limb.z += speed;
-            if (IsControlPressed(0, 97)) limb.z -= speed;
-            // F5/F6/F7 limb selection
-            if (IsControlJustPressed(0, 166)) { ikState.selectedLimb = 'rightArm'; console.log('[IK] Right Arm'); }
-            if (IsControlJustPressed(0, 167)) { ikState.selectedLimb = 'leftArm'; console.log('[IK] Left Arm'); }
-            if (IsControlJustPressed(0, 168)) { ikState.selectedLimb = 'head'; console.log('[IK] Head'); }
-            ikState.smoothRight = copyDir(ikState.rightArm);
-            ikState.smoothLeft  = copyDir(ikState.leftArm);
-            ikState.smoothHead  = copyDir(ikState.head);
-        } else {
-            // --- Pose mode: lerp for smoothing ---
-            const t = ikState.smoothFactor;
-            ikState.smoothRight = lerpDir(ikState.smoothRight, ikState.rightArm, t);
-            ikState.smoothLeft  = lerpDir(ikState.smoothLeft,  ikState.leftArm,  t);
-            ikState.smoothHead  = lerpDir(ikState.smoothHead,  ikState.head,     t);
-        }
+        // Lerp for smoothing webcam pose data
+        const t = ikState.smoothFactor;
+        ikState.smoothRight = lerpDir(ikState.smoothRight, ikState.rightArm, t);
+        ikState.smoothLeft  = lerpDir(ikState.smoothLeft,  ikState.leftArm,  t);
+        ikState.smoothHead  = lerpDir(ikState.smoothHead,  ikState.head,     t);
 
         // --- Ped transform ---
         const pedCoords = GetEntityCoords(ped, true);
@@ -219,60 +189,26 @@ async function startIkPuppetTick() {
         const drawSphere = (pos, r, g, b, size) => {
             DrawMarker(28, pos.x, pos.y, pos.z, 0, 0, 0, 0, 0, 0, size, size, size, r, g, b, 180, false, false, 2, false, null, null, false);
         };
-        drawSphere(rightWorld, 255, 80, 80, ikState.selectedLimb === 'rightArm' ? 0.1 : 0.05);
-        drawSphere(leftWorld,  80,  80, 255, ikState.selectedLimb === 'leftArm'  ? 0.1 : 0.05);
-
-        // --- HUD ---
-        SetTextFont(0);
-        SetTextScale(0.35, 0.35);
-        SetTextColour(255, 255, 255, 255);
-        SetTextOutline();
-        SetTextEntry('STRING');
-        const mode = ikState.poseMode ? '~g~POSE' : `~b~KBD ~w~${ikState.selectedLimb}`;
-        AddTextComponentString(`~r~[IK Puppet]~w~ ${mode}`);
-        DrawText(0.01, 0.01);
+        drawSphere(rightWorld, 255, 80, 80, 0.05);
+        drawSphere(leftWorld,  80,  80, 255, 0.05);
     });
 }
 
 // --- /webcam command ---
 
 RegisterCommand('webcam', () => {
-    if (ikState.active && ikState.poseMode) {
-        // Turn off
+    if (ikState.active) {
         stopIkPuppet();
         console.log('[IK Puppet] Disabled');
         SendNuiMessage(JSON.stringify({ type: 'cu::webcamDebug::toggle' }));
         return;
     }
 
-    if (!ikState.active) {
-        // Start fresh in pose mode
-        ikState.active = true;
-        ikState.poseMode = true;
-        startIkPuppetTick();
-        console.log('[IK Puppet] Pose mode — waiting for webcam data');
-    } else {
-        // Already in keyboard mode, switch to pose
-        ikState.poseMode = true;
-        console.log('[IK Puppet] Switched to pose mode');
-    }
+    ikState.active = true;
+    startIkPuppetTick();
+    console.log('[IK Puppet] Pose mode — waiting for webcam data');
     SetNuiFocus(true, true);
     SendNuiMessage(JSON.stringify({ type: 'cu::webcamDebug::toggle' }));
-}, false);
-
-// --- /ikpuppet command (keyboard-only mode) ---
-
-RegisterCommand('ikpuppet', () => {
-    if (ikState.active) {
-        stopIkPuppet();
-        console.log('[IK Puppet] Disabled');
-        return;
-    }
-    ikState.active = true;
-    ikState.poseMode = false;
-    ikState.selectedLimb = 'rightArm';
-    console.log('[IK Puppet] Keyboard mode');
-    startIkPuppetTick();
 }, false);
 
 // --- Cleanup on resource stop ---
