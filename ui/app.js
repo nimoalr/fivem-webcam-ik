@@ -50,7 +50,6 @@ let poseFps = 0;
 let lastLandmarks = {};
 let _frameCount = 0;
 let _fpsTimer = 0;
-let _sendLogCounter = 0;
 
 // --- DOM Elements ---
 const overlay = document.getElementById('webcam-overlay');
@@ -167,9 +166,6 @@ async function startPose() {
         const modelPath = window.location.protocol === 'nui:'
             ? 'nui://fivem-webcam-ik/ui/mediapipe/pose_landmarker_lite.task'
             : './mediapipe/pose_landmarker_lite.task';
-
-        console.log('[WebcamDebug] WASM base:', wasmBase);
-        console.log('[WebcamDebug] Model path:', modelPath);
 
         const fileset = await FilesetResolver.forVisionTasks(wasmBase);
 
@@ -344,32 +340,6 @@ function sendLandmarksToClient() {
         head: { x: headX, y: headY, z: headZ },
     };
 
-    // Debug log every 30 frames
-    _sendLogCounter++;
-    if (_sendLogCounter % 30 === 0) {
-        const rDx = lm.rightWrist.x - lm.rightShoulder.x;
-        const rDy = lm.rightWrist.y - lm.rightShoulder.y;
-        const rDz = lm.rightWrist.z - lm.rightShoulder.z;
-
-        const debugLog = {
-            frame: _sendLogCounter,
-            raw: {
-                rightWrist: { x: lm.rightWrist.x, y: lm.rightWrist.y, z: lm.rightWrist.z, vis: lm.rightWrist.visibility },
-                leftWrist: { x: lm.leftWrist.x, y: lm.leftWrist.y, z: lm.leftWrist.z, vis: lm.leftWrist.visibility },
-                rightShoulder: { x: lm.rightShoulder.x, y: lm.rightShoulder.y, z: lm.rightShoulder.z },
-                leftShoulder: { x: lm.leftShoulder.x, y: lm.leftShoulder.y, z: lm.leftShoulder.z },
-                nose: { x: lm.nose.x, y: lm.nose.y, z: lm.nose.z },
-                midShoulder: { x: midX, y: midY },
-            },
-            rArmMath: {
-                shoulderToWristDelta: { dx: rDx, dy: rDy, dz: rDz },
-                pedMapping: { pedX: -rDx * 3.0, pedZ: -rDy * 2.0, pedY: 1.0 + (-rDz * 2.0) },
-            },
-            output: payload,
-        };
-        console.log('[POSE DEBUG] ' + JSON.stringify(debugLog));
-    }
-
     // Send to client via NUI callback
     fetch('https://fivem-webcam-ik/uc::ikPuppet::poseLandmarks', {
         method: 'POST',
@@ -385,9 +355,6 @@ function toggleIkSend() {
     btnToggleIk.textContent = sendingToIk ? 'Stop IK' : 'Send to IK';
     poseSending.textContent = sendingToIk ? 'YES' : 'NO';
     poseSending.className = sendingToIk ? 'status-ok' : 'status-idle';
-    if (sendingToIk) {
-        console.log('[WebcamDebug] Now sending landmarks to IK puppet');
-    }
 }
 
 // --- Stop all ---
@@ -395,7 +362,6 @@ function toggleIkSend() {
 function stopAll() {
     poseActive = false;
     sendingToIk = false;
-    _sendLogCounter = 0;
 
     if (animFrameId) {
         cancelAnimationFrame(animFrameId);
@@ -431,8 +397,19 @@ function stopAll() {
     if (visible) setStatus('Stopped', 'status-idle');
 }
 
-function close() {
+function stopAllAndNotifyClient() {
     stopAll();
+    visible = false;
+    overlay.style.display = 'none';
+
+    fetch('https://fivem-webcam-ik/uc::webcamDebug::stopAll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+    }).catch(() => {});
+}
+
+function hideWindow() {
     visible = false;
     overlay.style.display = 'none';
 
@@ -448,21 +425,22 @@ function close() {
 btnStartWebcam.addEventListener('click', startWebcam);
 btnStartPose.addEventListener('click', startPose);
 btnToggleIk.addEventListener('click', toggleIkSend);
-btnStopAll.addEventListener('click', stopAll);
-btnClose.addEventListener('click', close);
+btnStopAll.addEventListener('click', stopAllAndNotifyClient);
+btnClose.addEventListener('click', hideWindow);
 
-// Listen for toggle message from client script
+// Listen for show/hide messages from client script
 window.addEventListener('message', (event) => {
     if (!event.data || !event.data.type) return;
 
-    if (event.data.type === 'cu::webcamDebug::toggle') {
-        visible = !visible;
-        overlay.style.display = visible ? '' : 'none';
-        if (visible) {
+    if (event.data.type === 'cu::webcamDebug::show') {
+        visible = true;
+        overlay.style.display = '';
+        if (!streaming) {
             setStatus('Ready', 'status-idle');
             setError('');
-        } else {
-            stopAll();
         }
+    } else if (event.data.type === 'cu::webcamDebug::hide') {
+        visible = false;
+        overlay.style.display = 'none';
     }
 });
