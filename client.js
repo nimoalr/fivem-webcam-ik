@@ -4,7 +4,7 @@
 // /webcam  — Toggle webcam + pose estimation + IK puppet mode
 //
 // Uses invisible snowball prop entities as IK targets.
-// Player is frozen while active (locomotion overrides IK otherwise).
+// Player can move freely while IK is active.
 // =============================================================================
 
 let ikPuppetTick = null;
@@ -109,7 +109,6 @@ function stopIkPuppet() {
     ikState.poseMode = false;
     ikReceivingData = false;
     ikLogCounter = 0;
-    FreezeEntityPosition(ped, false);
     if (ikPuppetTick !== null) { clearTick(ikPuppetTick); ikPuppetTick = null; }
     ikRightProp = deleteIkProp(ikRightProp);
     ikLeftProp = deleteIkProp(ikLeftProp);
@@ -127,8 +126,7 @@ async function startIkPuppetTick() {
     const ped = PlayerPedId();
     SetPedCanArmIk(ped, true);
     SetPedCanHeadIk(ped, true);
-    FreezeEntityPosition(ped, true);
-    console.log('[IK] Player frozen for IK control');
+    console.log('[IK] IK control started (free movement enabled)');
 
     ikRightProp = await createIkProp(ped);
     ikLeftProp = await createIkProp(ped);
@@ -141,18 +139,15 @@ async function startIkPuppetTick() {
         if (!ikState.active || !DoesEntityExist(ped)) return;
         if (ikRightProp === null || ikLeftProp === null) return;
 
-        // Disable all controls so locomotion doesn't fight IK
-        DisableAllControlActions(0);
-
         if (!ikState.poseMode) {
             // --- Keyboard mode ---
             const speed = ikState.speed;
             const limb = ikState[ikState.selectedLimb];
             // Arrow keys
-            if (IsDisabledControlPressed(0, 172) || IsControlPressed(0, 172)) limb.y += speed;
-            if (IsDisabledControlPressed(0, 173) || IsControlPressed(0, 173)) limb.y -= speed;
-            if (IsDisabledControlPressed(0, 174) || IsControlPressed(0, 174)) limb.x -= speed;
-            if (IsDisabledControlPressed(0, 175) || IsControlPressed(0, 175)) limb.x += speed;
+            if (IsControlPressed(0, 172)) limb.y += speed;
+            if (IsControlPressed(0, 173)) limb.y -= speed;
+            if (IsControlPressed(0, 174)) limb.x -= speed;
+            if (IsControlPressed(0, 175)) limb.x += speed;
             // Numpad +/-
             if (IsControlPressed(0, 96)) limb.z += speed;
             if (IsControlPressed(0, 97)) limb.z -= speed;
