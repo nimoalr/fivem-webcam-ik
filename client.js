@@ -191,15 +191,6 @@ async function startIkPuppetTick() {
         };
         drawSphere(rightWorld, 255, 80, 80, 0.05);
         drawSphere(leftWorld,  80,  80, 255, 0.05);
-
-        // --- HUD ---
-        SetTextFont(0);
-        SetTextScale(0.35, 0.35);
-        SetTextColour(255, 255, 255, 255);
-        SetTextOutline();
-        SetTextEntry('STRING');
-        AddTextComponentString('~r~[IK Puppet]~w~ ~g~POSE');
-        DrawText(0.01, 0.01);
     });
 }
 
