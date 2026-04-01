@@ -19,6 +19,7 @@ const IK_DEFAULTS = {
 
 const ikState = {
     active: false,
+    nuiVisible: false,
     rightArm:    { x: 0.3, y: 0.5, z: 0.0 },
     leftArm:     { x: -0.3, y: 0.5, z: 0.0 },
     head:        { x: 0.0, y: 10.0, z: 0.0 },
@@ -28,7 +29,6 @@ const ikState = {
     smoothFactor: 0.25,
 };
 
-let ikLogCounter = 0;
 let ikReceivingData = false;
 
 // --- Utilities ---
@@ -58,17 +58,19 @@ RegisterNuiCallback('uc::ikPuppet::poseLandmarks', (data, cb) => {
     ikState.head = data.head;
     if (!ikReceivingData) {
         ikReceivingData = true;
-        console.log('[IK] First pose data received');
-    }
-    ikLogCounter++;
-    if (ikLogCounter % 30 === 0) {
-        const f = (v) => `(${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)})`;
-        console.log(`[IK RECV] R:${f(data.rightArm)} L:${f(data.leftArm)} H:${f(data.head)}`);
     }
     cb('ok');
 });
 
 RegisterNuiCallback('uc::webcamDebug::close', (_data, cb) => {
+    ikState.nuiVisible = false;
+    SetNuiFocus(false, false);
+    cb('ok');
+});
+
+RegisterNuiCallback('uc::webcamDebug::stopAll', (_data, cb) => {
+    stopIkPuppet();
+    ikState.nuiVisible = false;
     SetNuiFocus(false, false);
     cb('ok');
 });
@@ -103,8 +105,8 @@ function deleteIkProp(prop) {
 function stopIkPuppet() {
     const ped = PlayerPedId();
     ikState.active = false;
+    ikState.nuiVisible = false;
     ikReceivingData = false;
-    ikLogCounter = 0;
     if (ikPuppetTick !== null) { clearTick(ikPuppetTick); ikPuppetTick = null; }
     ikRightProp = deleteIkProp(ikRightProp);
     ikLeftProp = deleteIkProp(ikLeftProp);
@@ -122,13 +124,9 @@ async function startIkPuppetTick() {
     const ped = PlayerPedId();
     SetPedCanArmIk(ped, true);
     SetPedCanHeadIk(ped, true);
-    console.log('[IK] IK control started (free movement enabled)');
 
     ikRightProp = await createIkProp(ped);
     ikLeftProp = await createIkProp(ped);
-    console.log(`[IK] Created IK prop entities: right=${ikRightProp} left=${ikLeftProp}`);
-
-    let tickLogCounter = 0;
 
     ikPuppetTick = setTick(() => {
         const ped = PlayerPedId();
@@ -171,20 +169,6 @@ async function startIkPuppetTick() {
         const hd = ikState.smoothHead;
         SetIkTarget(ped, 1, ped, 0, hd.x, hd.y, hd.z, 0, 100, 100);
 
-        // --- Debug logging ---
-        tickLogCounter++;
-        if (ikReceivingData && tickLogCounter % 120 === 0) {
-            const f3 = (p) => `(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`;
-            const fa = (arr) => `(${arr[0].toFixed(2)}, ${arr[1].toFixed(2)}, ${arr[2].toFixed(2)})`;
-            const rHand = GetPedBoneCoords(ped, 57005, 0, 0, 0);
-            const lHand = GetPedBoneCoords(ped, 18905, 0, 0, 0);
-            const rShoulder = GetPedBoneCoords(ped, 0x9D4D, 0, 0, 0);
-            console.log(`[IK] #${tickLogCounter} props: R=${DoesEntityExist(ikRightProp)} L=${DoesEntityExist(ikLeftProp)}`);
-            console.log(`[IK] targets: R=${f3(rightWorld)} L=${f3(leftWorld)} H=(${hd.x.toFixed(1)},${hd.y.toFixed(1)},${hd.z.toFixed(1)})`);
-            console.log(`[IK] bones: R_hand=${fa(rHand)} L_hand=${fa(lHand)}`);
-            console.log(`[IK] shoulder->hand: (${(rHand[0]-rShoulder[0]).toFixed(2)}, ${(rHand[1]-rShoulder[1]).toFixed(2)}, ${(rHand[2]-rShoulder[2]).toFixed(2)})`);
-        }
-
         // --- Debug markers ---
         const drawSphere = (pos, r, g, b, size) => {
             DrawMarker(28, pos.x, pos.y, pos.z, 0, 0, 0, 0, 0, 0, size, size, size, r, g, b, 180, false, false, 2, false, null, null, false);
@@ -198,17 +182,27 @@ async function startIkPuppetTick() {
 
 RegisterCommand('webcam', () => {
     if (ikState.active) {
-        stopIkPuppet();
-        console.log('[IK Puppet] Disabled');
-        SendNuiMessage(JSON.stringify({ type: 'cu::webcamDebug::toggle' }));
+        // System is running — just toggle the NUI window visibility
+        if (!ikState.nuiVisible) {
+            // NUI hidden → show it and give focus
+            ikState.nuiVisible = true;
+            SetNuiFocus(true, true);
+            SendNuiMessage(JSON.stringify({ type: 'cu::webcamDebug::show' }));
+        } else {
+            // NUI visible → hide it and release focus
+            ikState.nuiVisible = false;
+            SetNuiFocus(false, false);
+            SendNuiMessage(JSON.stringify({ type: 'cu::webcamDebug::hide' }));
+        }
         return;
     }
 
+    // System not active — start everything
     ikState.active = true;
+    ikState.nuiVisible = true;
     startIkPuppetTick();
-    console.log('[IK Puppet] Pose mode — waiting for webcam data');
     SetNuiFocus(true, true);
-    SendNuiMessage(JSON.stringify({ type: 'cu::webcamDebug::toggle' }));
+    SendNuiMessage(JSON.stringify({ type: 'cu::webcamDebug::show' }));
 }, false);
 
 // --- Cleanup on resource stop ---
