@@ -36,12 +36,17 @@ No build step. No dependencies. No framework. Just plain JS/HTML/CSS.
 
 ### Usage
 
-1. `webcam` in F8 console or `/webcam` in chat
-2. Ped freezes, webcam panel pops up
-3. **Start Webcam** -> grants camera access
-4. **Start Pose** -> loads the MediaPipe model (~5MB), you'll see a skeleton overlay on your feed
-5. **Send to IK** -> ped arms start following your movements
-6. `/webcam` again to stop and unfreeze
+1. `/webcam` in chat (or `webcam` in F8 console) — opens the webcam control panel
+2. **Start Webcam** -> grants camera access
+3. **Start Pose** -> loads the MediaPipe model (~5MB), you'll see a skeleton overlay on your feed
+4. **Send to IK** -> ped arms start following your movements
+
+The webcam command and control panel work as a two-layer system:
+
+- **Close button (×)** — hides the panel and returns game focus, but the webcam, pose detection, and IK all keep running in the background. Your ped continues to follow your movements.
+- **`/webcam` while hidden** — brings the panel back so you can adjust settings or monitor the feed. No restart needed.
+- **`/webcam` while panel is visible** — hides the panel (same as clicking ×).
+- **Stop All button** — fully shuts everything down: stops the webcam stream, pose detection, animation loop on the NUI side, and tears down the IK tick, props, and state on the client side. After this, `/webcam` starts fresh.
 
 ### Keyboard mode
 
